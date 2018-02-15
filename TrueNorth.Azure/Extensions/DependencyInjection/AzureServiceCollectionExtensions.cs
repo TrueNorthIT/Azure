@@ -1,8 +1,12 @@
 ﻿using System;
+using System.Threading.Tasks;
 using Microsoft.Azure.Documents.Client;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Options;
+using Microsoft.WindowsAzure.Storage;
+using Microsoft.WindowsAzure.Storage.Table;
 using TrueNorth.Azure.DocumentDb;
+using TrueNorth.Azure.TableStorage;
 
 // ReSharper disable once CheckNamespace (following Microsofts style)
 namespace TrueNorth.Extensions.DependencyInjection
