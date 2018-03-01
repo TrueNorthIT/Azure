@@ -4,7 +4,10 @@ using Microsoft.Azure.Documents.Client;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Options;
 using Microsoft.WindowsAzure.Storage;
+using Microsoft.WindowsAzure.Storage.Blob;
 using Microsoft.WindowsAzure.Storage.Table;
+using TrueNorth.Azure.BlobStorage;
+using TrueNorth.Azure.Common;
 using TrueNorth.Azure.DocumentDb;
 using TrueNorth.Azure.TableStorage;
 
@@ -35,6 +38,32 @@ namespace TrueNorth.Extensions.DependencyInjection
             );
         }
 
+        public static void AddBlobStorage(this IServiceCollection serviceCollection)
+        {
+            serviceCollection.AddSingleton((s) =>
+                {
+                    var options = s.GetService<IOptions<BlobStorageOptions>>().Value;
+
+                    CloudStorageAccount storageAccount = CloudStorageAccount.Parse(
+                        options.ConnectionString
+                    );
+
+                    var containerName = options.DefaultContainer;
+                    CloudBlobClient blobClient = storageAccount.CreateCloudBlobClient();
+                    return blobClient.GetContainerReference(containerName);
+                }
+            );
+        }
+
+        public static void AddSingleInstanceStorage(this IServiceCollection serviceCollection)
+        {
+            serviceCollection.AddBlobStorage();
+            serviceCollection.AddSingleton<SHA256AddressProvider>();
+            serviceCollection.AddSingleton<SingleInstanceStorage>();
+        }
+
+        
+
         public static void AddTableStorage(this IServiceCollection serviceCollection)
         {
             serviceCollection.AddSingleton<CloudTable>(s =>
@@ -52,19 +81,6 @@ namespace TrueNorth.Extensions.DependencyInjection
                 return cloudtable;
 
             });
-
-            //serviceCollection.AddSingleton<ILoggerFactory>(s =>
-            //{
-            //    var tableStorageOptions = s.GetService<IOptions<TableStorageOptions>>().Value;
-            //    var logWriter = s.GetService<BufferedLogWriter<LogEntryForWeb>>();
-            //    var loggerFactory = new LoggerFactory();
-
-            //    var minLogLevel = TrueNorth.Azure.LoggerExtensions.ParseLogLevel(tableStorageOptions.MinLevel);
-
-            //    loggerFactory.AddProvider(new AzureTableStorageLoggerProvider(logWriter, minLogLevel));
-            //    return loggerFactory;
-            //});
         }
-
     }
 }
