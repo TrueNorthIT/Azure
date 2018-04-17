@@ -59,5 +59,15 @@ namespace TrueNorth.Azure.BlobStorage
             blockBlob.Properties.ContentType = mimeType;
             return address;
         }
+
+        public async Task<Stream> DownloadDocument(string address)
+        {
+            var blockBlob = _cloudBlobContainer.GetBlockBlobReference(address);
+
+            Stream rval = new MemoryStream();
+            await blockBlob.DownloadToStreamAsync(rval);
+            rval.Position = 0;
+            return rval;
+        }
     }
 }
