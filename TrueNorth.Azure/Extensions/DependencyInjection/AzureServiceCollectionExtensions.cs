@@ -64,7 +64,7 @@ namespace TrueNorth.Extensions.DependencyInjection
 
         
 
-        public static void AddTableStorage(this IServiceCollection serviceCollection)
+        public static void AddTableStorage(this IServiceCollection serviceCollection, string logTableName)
         {
             serviceCollection.AddSingleton<CloudTable>(s =>
             {
@@ -73,7 +73,7 @@ namespace TrueNorth.Extensions.DependencyInjection
                 var azureLogConnection = tableStorageOptions.AzureTableStorageConnection;
                 CloudStorageAccount storageAccount = CloudStorageAccount.Parse(azureLogConnection);
                 CloudTableClient tableClient = storageAccount.CreateCloudTableClient();
-                CloudTable cloudtable = tableClient.GetTableReference("FastReserveLogs");
+                CloudTable cloudtable = tableClient.GetTableReference(logTableName);
 
                 var task = Task.Run(async () => await cloudtable.CreateIfNotExistsAsync());
                 task.Wait();
