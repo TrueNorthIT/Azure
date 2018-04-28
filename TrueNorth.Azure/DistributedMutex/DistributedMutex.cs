@@ -18,6 +18,20 @@ namespace TrueNorth.Azure
         public DistributedMutex(IOptions<DistributedMutexOptions> options)
         {
             this.Options = options.Value;
+
+            var storageAccount = CloudStorageAccount.Parse(Options.StorageConnectionString);
+            blobClient = storageAccount.CreateCloudBlobClient();
+
+            var containerReference = blobClient.GetContainerReference(Options.ContainerName);
+            containerReference.CreateIfNotExistsAsync().Wait();
+            var blobReference = containerReference.GetBlockBlobReference(Options.Key);
+            var task = blobReference.ExistsAsync();
+            task.Wait();
+            if (!task.Result)
+            {
+                blobReference.UploadTextAsync(string.Empty).Wait();
+            }
+
         }
 
         /// <summary>
@@ -25,29 +39,23 @@ namespace TrueNorth.Azure
         /// </summary>
         public async Task AcquireAsync()
         {
-            var storageAccount = CloudStorageAccount.Parse(Options.StorageConnectionString);
-            blobClient = storageAccount.CreateCloudBlobClient();
-
             var containerReference = blobClient.GetContainerReference(Options.ContainerName);
-            await containerReference.CreateIfNotExistsAsync();
             var blobReference = containerReference.GetBlockBlobReference(Options.Key);
 
-            if (!await blobReference.ExistsAsync())
-            {
-                await blobReference.UploadTextAsync(string.Empty);
-            }
 
             try
             {
                 leaseId = await blobReference.AcquireLeaseAsync(TimeSpan.FromSeconds(Options.LeaseTimeSeconds));
             }
-
             catch (StorageException ex)
             {
                 Console.WriteLine("Error while acquiring an a job lease.");
                 Console.WriteLine(ex.Message);
 
-                if (ex.RequestInformation.HttpStatusCode == (int)HttpStatusCode.Conflict) throw new InvalidOperationException($"Another job is already running for {Options.Key}.");
+                if (ex.RequestInformation.HttpStatusCode == (int)HttpStatusCode.Conflict)
+                {
+                    throw new InvalidOperationException($"Another job is already running for {Options.Key}.");
+                }
 
                 throw;
             }
@@ -60,7 +68,6 @@ namespace TrueNorth.Azure
         public async Task ReleaseLockAsync()
         {
             var containerReference = blobClient.GetContainerReference(Options.ContainerName);
-            await containerReference.CreateIfNotExistsAsync();
             var blobReference = containerReference.GetBlockBlobReference(Options.Key);
 
             await blobReference.ReleaseLeaseAsync(new AccessCondition
@@ -75,7 +82,6 @@ namespace TrueNorth.Azure
         public async Task RenewAsync()
         {
             var containerClientReference = blobClient.GetContainerReference(Options.ContainerName);
-            await containerClientReference.CreateIfNotExistsAsync();
             var blobReference = containerClientReference.GetBlockBlobReference(Options.Key);
 
             await blobReference.RenewLeaseAsync(new AccessCondition
