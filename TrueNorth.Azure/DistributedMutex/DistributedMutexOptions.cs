@@ -11,5 +11,8 @@ namespace TrueNorth.Azure
         public string Key { get; set; }
 
         public int LeaseTimeSeconds { get; set; }
+
+        public int Retries { get; set; }
+        public int RetryWaitMs { get; set; }
     }
 }

@@ -13,7 +13,6 @@ namespace TrueNorth.Azure
     {
         private DistributedMutexOptions Options { get; set; }
         private CloudBlobClient blobClient;
-        private string leaseId;
 
         public DistributedMutex(IOptions<DistributedMutexOptions> options)
         {
@@ -37,35 +36,46 @@ namespace TrueNorth.Azure
         /// <summary>
         ///     Acquires a lease blob.
         /// </summary>
-        public async Task AcquireAsync()
+        public async Task<string> AcquireAsync()
         {
             var containerReference = blobClient.GetContainerReference(Options.ContainerName);
             var blobReference = containerReference.GetBlockBlobReference(Options.Key);
 
+            int tryCount = 0;
 
-            try
+            string leaseId = null;
+            while (tryCount < Options.Retries)
             {
-                leaseId = await blobReference.AcquireLeaseAsync(TimeSpan.FromSeconds(Options.LeaseTimeSeconds));
-            }
-            catch (StorageException ex)
-            {
-                Console.WriteLine("Error while acquiring an a job lease.");
-                Console.WriteLine(ex.Message);
-
-                if (ex.RequestInformation.HttpStatusCode == (int)HttpStatusCode.Conflict)
+                try
                 {
-                    throw new InvalidOperationException($"Another job is already running for {Options.Key}.");
+                    tryCount++;
+                    leaseId = await blobReference.AcquireLeaseAsync(TimeSpan.FromSeconds(Options.LeaseTimeSeconds));
+                    if (!String.IsNullOrEmpty(leaseId))
+                    {
+                        return leaseId;
+                    }
                 }
-
-                throw;
+                catch (StorageException ex)
+                {
+                    if (ex.RequestInformation.HttpStatusCode == (int)HttpStatusCode.Conflict)
+                    {
+                        await Task.Delay(Options.RetryWaitMs);
+                    }
+                    else
+                    {
+                        throw;
+                    }
+                }
             }
+
+            throw new InvalidOperationException($"Could not obtain lease for {Options.Key}.");
         }
 
 
         /// <summary>
         ///     Releases a lease blob.
         /// </summary>  	
-        public async Task ReleaseLockAsync()
+        public async Task ReleaseLockAsync(string leaseId)
         {
             var containerReference = blobClient.GetContainerReference(Options.ContainerName);
             var blobReference = containerReference.GetBlockBlobReference(Options.Key);
@@ -79,7 +89,7 @@ namespace TrueNorth.Azure
         /// <summary>
         ///     Renews the lease.
         /// </summary>  	
-        public async Task RenewAsync()
+        public async Task RenewAsync(string leaseId)
         {
             var containerClientReference = blobClient.GetContainerReference(Options.ContainerName);
             var blobReference = containerClientReference.GetBlockBlobReference(Options.Key);
