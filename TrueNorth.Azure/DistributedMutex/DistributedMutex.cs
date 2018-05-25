@@ -36,7 +36,7 @@ namespace TrueNorth.Azure
         /// <summary>
         ///     Acquires a lease blob.
         /// </summary>
-        public async Task<string> AcquireAsync()
+        public async Task<string> AcquireAsync(bool mustAcquire)
         {
             var containerReference = blobClient.GetContainerReference(Options.ContainerName);
             var blobReference = containerReference.GetBlockBlobReference(Options.Key);
@@ -44,7 +44,7 @@ namespace TrueNorth.Azure
             int tryCount = 0;
 
             string leaseId = null;
-            while (tryCount < Options.Retries)
+            while (true)
             {
                 try
                 {
@@ -59,16 +59,21 @@ namespace TrueNorth.Azure
                 {
                     if (ex.RequestInformation.HttpStatusCode == (int)HttpStatusCode.Conflict)
                     {
-                        await Task.Delay(Options.RetryWaitMs);
+                        if (mustAcquire)
+                        {
+                            await Task.Delay(Options.RetryWaitMs);
+                        }
+                        else
+                        {
+                            return null;
+                        }
                     }
                     else
                     {
                         throw;
                     }
                 }
-            }
-
-            throw new InvalidOperationException($"Could not obtain lease for {Options.Key}.");
+            }            
         }
 
 

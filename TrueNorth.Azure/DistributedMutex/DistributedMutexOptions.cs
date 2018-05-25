@@ -12,7 +12,7 @@ namespace TrueNorth.Azure
 
         public int LeaseTimeSeconds { get; set; }
 
-        public int Retries { get; set; }
+        //public int Retries { get; set; }
         public int RetryWaitMs { get; set; }
     }
 }
