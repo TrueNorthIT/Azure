@@ -82,5 +82,27 @@ namespace TrueNorth.Extensions.DependencyInjection
 
             });
         }
+
+        public static void AddTableStorage<T>(this IServiceCollection serviceCollection) where T : class, ICloudTableWrapper, new()
+        {
+            serviceCollection.AddSingleton<T>(s =>
+            {
+                T cloudTableWrapper = new T();
+                var tableStorageOptions = s.GetService<IOptions<TableStorageOptions>>().Value;
+
+                var azureLogConnection = tableStorageOptions.AzureTableStorageConnection;
+                CloudStorageAccount storageAccount = CloudStorageAccount.Parse(azureLogConnection);
+                CloudTableClient tableClient = storageAccount.CreateCloudTableClient();
+                CloudTable cloudtable = tableClient.GetTableReference(cloudTableWrapper.TableName);
+
+                var task = Task.Run(async () => await cloudtable.CreateIfNotExistsAsync());
+                task.Wait();
+
+                cloudTableWrapper.CloudTable = cloudtable;
+
+                return cloudTableWrapper;
+
+            });
+        }
     }
 }
