@@ -28,8 +28,8 @@ namespace TrueNorth.Extensions.DependencyInjection
                         ConnectionMode = ConnectionMode.Gateway,
                         RetryOptions =
                         {
-                            MaxRetryAttemptsOnThrottledRequests = 10,
-                            MaxRetryWaitTimeInSeconds = 60
+                            MaxRetryAttemptsOnThrottledRequests = cosmosDbOptions.MaxRetryAttemptsOnThrottledRequests,
+                            MaxRetryWaitTimeInSeconds = cosmosDbOptions.MaxRetryWaitTimeInSeconds
                         }
                     };
                     return new DocumentClient(new Uri(cosmosDbOptions.EndpointUri), cosmosDbOptions.PrimaryKey,

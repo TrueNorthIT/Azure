@@ -8,5 +8,7 @@ namespace TrueNorth.Azure.DocumentDb
     {
         public string EndpointUri { get; set; }
         public string PrimaryKey { get; set; }
+        public int MaxRetryAttemptsOnThrottledRequests { get; set; } = 10;
+        public int MaxRetryWaitTimeInSeconds { get; set; } = 60;
     }
 }
