@@ -1,6 +1,7 @@
 ﻿using System;
 using System.Threading.Tasks;
 using Microsoft.Azure.Documents.Client;
+using Microsoft.Azure.Search;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Options;
 using Microsoft.WindowsAzure.Storage;
@@ -9,6 +10,7 @@ using Microsoft.WindowsAzure.Storage.Table;
 using TrueNorth.Azure.BlobStorage;
 using TrueNorth.Azure.Common;
 using TrueNorth.Azure.DocumentDb;
+using TrueNorth.Azure.Search;
 using TrueNorth.Azure.TableStorage;
 
 // ReSharper disable once CheckNamespace (following Microsofts style)
@@ -82,6 +84,33 @@ namespace TrueNorth.Extensions.DependencyInjection
 
             });
         }
+
+        public static void AddSearchIndexClientService(this IServiceCollection serviceCollection, string index)
+        {
+            serviceCollection.AddSingleton((s) =>
+            {
+                var options = s.GetService<IOptions<SearchServiceOptions>>().Value;
+                return new SearchIndexClient(
+                    options.ServiceName, index, new SearchCredentials(options.ApiKey)
+                    );
+
+            }
+          );
+        }
+
+        public static void AddSearchAdminService(this IServiceCollection serviceCollection)
+        {
+            serviceCollection.AddSingleton((s) =>
+            {
+                var options = s.GetService<IOptions<SearchServiceOptions>>().Value;
+                return new SearchServiceClient(
+                    options.ServiceName, new SearchCredentials(options.AdminKey)
+                );
+            }
+            );
+        }
+
+        
 
         public static void AddTableStorage<T>(this IServiceCollection serviceCollection) where T : class, ICloudTableWrapper, new()
         {
