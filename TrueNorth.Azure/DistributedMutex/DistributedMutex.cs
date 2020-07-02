@@ -1,10 +1,10 @@
-﻿using Microsoft.Extensions.Options;
-using Microsoft.WindowsAzure.Storage;
-using Microsoft.WindowsAzure.Storage.Blob;
+﻿using Azure;
+using Azure.Storage.Blobs;
+using Azure.Storage.Blobs.Specialized;
+using Microsoft.Extensions.Options;
 using System;
-using System.Collections.Generic;
+using System.IO;
 using System.Net;
-using System.Text;
 using System.Threading.Tasks;
 
 namespace TrueNorth.Azure
@@ -12,23 +12,18 @@ namespace TrueNorth.Azure
     public class DistributedMutex
     {
         private DistributedMutexOptions Options { get; set; }
-        private CloudBlobClient blobClient;
+        private BlobContainerClient blobClient;
 
         public DistributedMutex(IOptions<DistributedMutexOptions> options)
         {
             this.Options = options.Value;
 
-            var storageAccount = CloudStorageAccount.Parse(Options.StorageConnectionString);
-            blobClient = storageAccount.CreateCloudBlobClient();
-
-            var containerReference = blobClient.GetContainerReference(Options.ContainerName);
-            containerReference.CreateIfNotExistsAsync().Wait();
-            var blobReference = containerReference.GetBlockBlobReference(Options.Key);
-            var task = blobReference.ExistsAsync();
-            task.Wait();
-            if (!task.Result)
+            blobClient = new BlobContainerClient(Options.StorageConnectionString, Options.ContainerName);
+            blobClient.CreateIfNotExists();
+            var blobReference = blobClient.GetBlobClient(Options.Key);
+            if (!blobReference.Exists())
             {
-                blobReference.UploadTextAsync(string.Empty).Wait();
+                blobReference.Upload(new MemoryStream());
             }
 
         }
@@ -38,8 +33,8 @@ namespace TrueNorth.Azure
         /// </summary>
         public async Task<string> AcquireAsync(bool mustAcquire)
         {
-            var containerReference = blobClient.GetContainerReference(Options.ContainerName);
-            var blobReference = containerReference.GetBlockBlobReference(Options.Key);
+            var blobReference = blobClient.GetBlobClient(Options.Key);
+            var leaseClient = blobReference.GetBlobLeaseClient();
 
             int tryCount = 0;
 
@@ -49,15 +44,15 @@ namespace TrueNorth.Azure
                 try
                 {
                     tryCount++;
-                    leaseId = await blobReference.AcquireLeaseAsync(TimeSpan.FromSeconds(Options.LeaseTimeSeconds));
+                    leaseId = (await leaseClient.AcquireAsync(TimeSpan.FromSeconds(Options.LeaseTimeSeconds))).Value.LeaseId;
                     if (!String.IsNullOrEmpty(leaseId))
                     {
                         return leaseId;
                     }
                 }
-                catch (StorageException ex)
+                catch (RequestFailedException ex)
                 {
-                    if (ex.RequestInformation.HttpStatusCode == (int)HttpStatusCode.Conflict)
+                    if (ex.Status == (int)HttpStatusCode.Conflict)
                     {
                         if (mustAcquire)
                         {
@@ -82,13 +77,10 @@ namespace TrueNorth.Azure
         /// </summary>  	
         public async Task ReleaseLockAsync(string leaseId)
         {
-            var containerReference = blobClient.GetContainerReference(Options.ContainerName);
-            var blobReference = containerReference.GetBlockBlobReference(Options.Key);
+            var blobReference = blobClient.GetBlobClient(Options.Key);
+            var leaseClient = blobReference.GetBlobLeaseClient(leaseId);
 
-            await blobReference.ReleaseLeaseAsync(new AccessCondition
-            {
-                LeaseId = leaseId
-            });
+            await leaseClient.ReleaseAsync();
         }
 
         /// <summary>
@@ -96,13 +88,10 @@ namespace TrueNorth.Azure
         /// </summary>  	
         public async Task RenewAsync(string leaseId)
         {
-            var containerClientReference = blobClient.GetContainerReference(Options.ContainerName);
-            var blobReference = containerClientReference.GetBlockBlobReference(Options.Key);
+            var blobReference = blobClient.GetBlobClient(Options.Key);
+            var leaseClient = blobReference.GetBlobLeaseClient(leaseId);
 
-            await blobReference.RenewLeaseAsync(new AccessCondition
-            {
-                LeaseId = leaseId
-            });
+            await leaseClient.RenewAsync();
         }
     }
 }
