@@ -1,22 +1,20 @@
-﻿using System;
-using System.Collections.Generic;
-using System.IO;
-using System.Text;
+﻿using System.IO;
 using System.Threading.Tasks;
+using Azure.Storage.Blobs;
+using Azure.Storage.Blobs.Models;
 using Microsoft.Extensions.Logging;
-using Microsoft.WindowsAzure.Storage.Blob;
 using TrueNorth.Azure.Common;
 
 namespace TrueNorth.Azure.BlobStorage
 {
     public class SingleInstanceStorage
     {
-        private readonly CloudBlobContainer _cloudBlobContainer;
+        private readonly BlobContainerClient _cloudBlobContainer;
         private readonly SHA256AddressProvider _sha256AddressProvider;
         private volatile bool created;
         private readonly ILogger _logger;
 
-        public SingleInstanceStorage(CloudBlobContainer cloudBlobContainer, ILoggerFactory loggerFactory, SHA256AddressProvider sha256AddressProvider)
+        public SingleInstanceStorage(BlobContainerClient cloudBlobContainer, ILoggerFactory loggerFactory, SHA256AddressProvider sha256AddressProvider)
         {
             _cloudBlobContainer = cloudBlobContainer;
             _sha256AddressProvider = sha256AddressProvider;
@@ -33,39 +31,33 @@ namespace TrueNorth.Azure.BlobStorage
             if (!created)
             {
                 // CreateIfNotExistsAsync is thread safe, so no need to lock.
-                await _cloudBlobContainer.CreateIfNotExistsAsync();
-                await _cloudBlobContainer.SetPermissionsAsync(new BlobContainerPermissions
-                {
-                    PublicAccess = BlobContainerPublicAccessType.Off
-                });
+                await _cloudBlobContainer.CreateIfNotExistsAsync(publicAccessType: PublicAccessType.None);
                 created = true;
             }
 
-            var blockBlob = _cloudBlobContainer.GetBlockBlobReference(address);
+            var blockBlob = _cloudBlobContainer.GetBlobClient(address);
             bool exists = await blockBlob.ExistsAsync();
 
             //no need to check anything, as the address is the MD5 hash of the value
             if (!exists)
             {
                 _logger.LogTrace($"WriteDocument: Creating blob {address}");
-                await blockBlob.UploadFromStreamAsync(stream);
+                await blockBlob.UploadAsync(stream, new BlobHttpHeaders() { ContentType = mimeType });
                 
             }
-            if (mimeType != blockBlob.Properties.ContentType || !exists)
+            else if (mimeType != (await blockBlob.GetPropertiesAsync()).Value.ContentType)
             {
-                blockBlob.Properties.ContentType = mimeType;
-                await blockBlob.SetPropertiesAsync();
+                await blockBlob.SetHttpHeadersAsync(new BlobHttpHeaders() { ContentType = mimeType });
             }
-            blockBlob.Properties.ContentType = mimeType;
             return address;
         }
 
         public async Task<Stream> DownloadDocument(string address)
         {
-            var blockBlob = _cloudBlobContainer.GetBlockBlobReference(address);
+            var blockBlob = _cloudBlobContainer.GetBlobClient(address);
 
             Stream rval = new MemoryStream();
-            await blockBlob.DownloadToStreamAsync(rval);
+            await blockBlob.DownloadToAsync(rval);
             rval.Position = 0;
             return rval;
         }

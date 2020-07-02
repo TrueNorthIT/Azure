@@ -1,12 +1,11 @@
 ﻿using System;
 using System.Threading.Tasks;
+using Azure.Storage.Blobs;
+using Microsoft.Azure.Cosmos.Table;
 using Microsoft.Azure.Documents.Client;
 using Microsoft.Azure.Search;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Options;
-using Microsoft.WindowsAzure.Storage;
-using Microsoft.WindowsAzure.Storage.Blob;
-using Microsoft.WindowsAzure.Storage.Table;
 using TrueNorth.Azure.BlobStorage;
 using TrueNorth.Azure.Common;
 using TrueNorth.Azure.DocumentDb;
@@ -45,14 +44,7 @@ namespace TrueNorth.Extensions.DependencyInjection
             serviceCollection.AddSingleton((s) =>
                 {
                     var options = s.GetService<IOptions<BlobStorageOptions>>().Value;
-
-                    CloudStorageAccount storageAccount = CloudStorageAccount.Parse(
-                        options.ConnectionString
-                    );
-
-                    var containerName = options.DefaultContainer;
-                    CloudBlobClient blobClient = storageAccount.CreateCloudBlobClient();
-                    return blobClient.GetContainerReference(containerName);
+                    return new BlobContainerClient(options.ConnectionString, options.DefaultContainer);
                 }
             );
         }
