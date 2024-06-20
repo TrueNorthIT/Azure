@@ -1,7 +1,9 @@
 ﻿using System;
 using System.Threading.Tasks;
+using Azure.Data.Tables;
 using Azure.Storage.Blobs;
-using Microsoft.Azure.Cosmos.Table;
+using Microsoft.Azure.Cosmos;
+using Microsoft.Azure.Cosmos.Fluent;
 using Microsoft.Azure.Documents.Client;
 using Microsoft.Azure.Search;
 using Microsoft.Extensions.DependencyInjection;
@@ -23,18 +25,11 @@ namespace TrueNorth.Extensions.DependencyInjection
                 {
                     var cosmosDbOptions = s.GetService<IOptions<DocumentDbOptions>>().Value;
 
-                    var connectionPolicy = new ConnectionPolicy
-                    {
-                        MaxConnectionLimit = 100,
-                        ConnectionMode = ConnectionMode.Gateway,
-                        RetryOptions =
-                        {
-                            MaxRetryAttemptsOnThrottledRequests = cosmosDbOptions.MaxRetryAttemptsOnThrottledRequests,
-                            MaxRetryWaitTimeInSeconds = cosmosDbOptions.MaxRetryWaitTimeInSeconds
-                        }
-                    };
-                    return new DocumentClient(new Uri(cosmosDbOptions.EndpointUri), cosmosDbOptions.PrimaryKey,
-                        connectionPolicy);
+                    var cosmosClientBuilder = new CosmosClientBuilder(cosmosDbOptions.EndpointUri, cosmosDbOptions.PrimaryKey)
+                        .WithConnectionModeGateway(100)
+                        .WithThrottlingRetryOptions(new TimeSpan(0, 0, cosmosDbOptions.MaxRetryWaitTimeInSeconds), cosmosDbOptions.MaxRetryAttemptsOnThrottledRequests);
+
+                    return cosmosClientBuilder.Build();
                 }
             );
         }
@@ -54,26 +49,21 @@ namespace TrueNorth.Extensions.DependencyInjection
             serviceCollection.AddBlobStorage();
             serviceCollection.AddSingleton<SHA256AddressProvider>();
             serviceCollection.AddSingleton<SingleInstanceStorage>();
-        }
+        }        
 
-        
-
-        public static void AddTableStorage(this IServiceCollection serviceCollection, string logTableName)
+        public static void AddTableStorage(this IServiceCollection serviceCollection, string tableName)
         {
-            serviceCollection.AddSingleton<CloudTable>(s =>
+            serviceCollection.AddSingleton <TableClient>(s =>
             {
                 var tableStorageOptions = s.GetService<IOptions<TableStorageOptions>>().Value;
 
-                var azureLogConnection = tableStorageOptions.AzureTableStorageConnection;
-                CloudStorageAccount storageAccount = CloudStorageAccount.Parse(azureLogConnection);
-                CloudTableClient tableClient = storageAccount.CreateCloudTableClient();
-                CloudTable cloudtable = tableClient.GetTableReference(logTableName);
+                var serviceClient = new TableServiceClient(new Uri(tableStorageOptions.AzureTableStorageConnection));
+                var tableClient = serviceClient.GetTableClient(tableName);
 
-                var task = Task.Run(async () => await cloudtable.CreateIfNotExistsAsync());
+                var task = Task.Run(async () => await tableClient.CreateIfNotExistsAsync());
                 task.Wait();
 
-                return cloudtable;
-
+                return tableClient;
             });
         }
 
@@ -102,24 +92,21 @@ namespace TrueNorth.Extensions.DependencyInjection
             );
         }
 
-        
-
         public static void AddTableStorage<T>(this IServiceCollection serviceCollection) where T : class, ICloudTableWrapper, new()
         {
             serviceCollection.AddSingleton<T>(s =>
             {
                 T cloudTableWrapper = new T();
+
                 var tableStorageOptions = s.GetService<IOptions<TableStorageOptions>>().Value;
 
-                var azureLogConnection = tableStorageOptions.AzureTableStorageConnection;
-                CloudStorageAccount storageAccount = CloudStorageAccount.Parse(azureLogConnection);
-                CloudTableClient tableClient = storageAccount.CreateCloudTableClient();
-                CloudTable cloudtable = tableClient.GetTableReference(cloudTableWrapper.TableName);
+                var serviceClient = new TableServiceClient(new Uri(tableStorageOptions.AzureTableStorageConnection));
+                var tableClient = serviceClient.GetTableClient(default(T).TableName);
 
-                var task = Task.Run(async () => await cloudtable.CreateIfNotExistsAsync());
+                var task = Task.Run(async () => await tableClient.CreateIfNotExistsAsync());
                 task.Wait();
 
-                cloudTableWrapper.CloudTable = cloudtable;
+                cloudTableWrapper.CloudTableClient = tableClient;
 
                 return cloudTableWrapper;
 

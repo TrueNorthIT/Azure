@@ -1,11 +1,11 @@
 ﻿
-using Microsoft.Azure.Cosmos.Table;
+using Azure.Data.Tables;
 
 namespace TrueNorth.Azure.TableStorage
 {
     public interface ICloudTableWrapper
     {
-        CloudTable CloudTable { get; set; }
+        TableClient CloudTableClient { get; set; }
 
         string TableName { get; }
     }

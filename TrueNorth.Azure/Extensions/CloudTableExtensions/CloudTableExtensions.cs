@@ -1,6 +1,8 @@
-﻿using Microsoft.Azure.Cosmos.Table;
+﻿using Azure;
+using Azure.Data.Tables;
 using System;
 using System.Collections.Generic;
+using System.Linq.Expressions;
 using System.Text;
 using System.Threading;
 using System.Threading.Tasks;
@@ -9,20 +11,22 @@ namespace TrueNorth.Azure.Extensions.CloudTableEx
 {
     public static class CloudTableExtensions
     {
-        public static async Task<IList<T>> ExecuteQueryAsync<T>(this CloudTable table, TableQuery<T> query, CancellationToken ct = default(CancellationToken), Action<IList<T>> onProgress = null) where T : ITableEntity, new()
-        {
+        public static async Task<IList<T>> ExecuteQueryAsync<T>(this TableClient tableClient, string tableName, Expression<Func<T, bool>> filter, List<string> columns, CancellationToken ct = default(CancellationToken), Action<IList<T>> onProgress = null) where T : class, ITableEntity, new()        {
+            
             var items = new List<T>();
-            TableContinuationToken token = null;
 
-            do
+            string continuationToken = null;
+
+            var pageable = tableClient.QueryAsync<T>(filter: filter, maxPerPage: 1000, select: columns, cancellationToken: ct);
+
+            await using (IAsyncEnumerator<Page<T>> enumerator = pageable.AsPages(continuationToken).GetAsyncEnumerator())
             {
-
-                TableQuerySegment<T> seg = await table.ExecuteQuerySegmentedAsync<T>(query, token);
-                token = seg.ContinuationToken;
-                items.AddRange(seg);
-                if (onProgress != null) onProgress(items);
-
-            } while (token != null && !ct.IsCancellationRequested);
+                await enumerator.MoveNextAsync();
+                foreach (var item in enumerator.Current.Values)
+                {
+                    items.Add(item);
+                }
+            }
 
             return items;
         }
