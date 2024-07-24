@@ -100,7 +100,7 @@ namespace TrueNorth.Extensions.DependencyInjection
 
                 var tableStorageOptions = s.GetService<IOptions<TableStorageOptions>>().Value;
 
-                var serviceClient = new TableServiceClient(new Uri(tableStorageOptions.AzureTableStorageConnection));
+                var serviceClient = new TableServiceClient(tableStorageOptions.AzureTableStorageConnection);
                 var tableClient = serviceClient.GetTableClient(default(T).TableName);
 
                 var task = Task.Run(async () => await tableClient.CreateIfNotExistsAsync());
